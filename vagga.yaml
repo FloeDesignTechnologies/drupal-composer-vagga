@@ -1,0 +1,78 @@
+containers:
+
+  memcache:
+    setup:
+      - !Ubuntu trusty
+      - !Install
+        - memcached
+    environ:
+      PORT: 11211
+      CACHE_SIZE: 64
+    volumes:
+      /var/log: !Tmpfs
+      mode: 0o766
+
+  php:
+    setup:
+     - !Ubuntu trusty
+     - !Install [software-properties-common]
+     - !Sh add-apt-repository ppa:ondrej/php -y && apt-get update
+     - !Install
+       - php7.0
+       - php7.0-fpm
+       - php7.0-zip
+       - php7.0-gd
+       - php7.0-xml
+       - php7.0-mbstring
+       - php7.0-curl
+       - php7.0-sqlite3
+       - php-memcached
+       - git
+       - rsync
+       - sqlite3
+       - curl
+
+  drupal:
+    setup:
+      - !Container php
+      - !ComposerConfig
+        install_runtime: false
+      - !ComposerDependencies
+        optimize_autoloader: true
+    environ:
+      PORT: 8080
+      DB_URL: sqlite:///work/.db/drupal.sqlite
+    volumes:
+      /run: !Tmpfs
+       mode: 0o766
+       subdirs:
+        php:
+      /var/log: !Tmpfs
+       mode: 0o766
+
+commands:
+  run: !Supervise
+    description: Run the Drupal development server
+    children:
+      drupal: !Command
+        container: drupal
+        run: |
+          # Install site if Drush cannot bootstrap Drupal
+          if ! drush status --fields=bootstrap | grep -q 'Successful'; then
+            drush site-install --db-url=$DB_URL --yes
+          fi
+          drush runserver :$PORT
+        work-dir: web
+      memcached: !Command
+        container: memcache
+        run: memcached -u memcache -p $PORT -m $CACHE_SIZE -vv
+  drush: !Command
+    description: Run a Drush command
+    container: drupal
+    run: [drush]
+    work-dir: web
+  drupal: !Command
+    description: Run a Drupal console command
+    container: drupal
+    run: [drupal]
+    work-dir: web
