@@ -40,8 +40,10 @@ containers:
       - !ComposerDependencies
         optimize_autoloader: true
     environ:
+      HOST: 127.0.0.1
       PORT: 8080
-      DB_URL: sqlite:///work/.db/drupal.sqlite
+      DB_URL: sqlite://sites/default/drupal.sqlite
+      PROFILE: standard
     volumes:
       /run: !Tmpfs
        mode: 0o766
@@ -49,6 +51,22 @@ containers:
         php:
       /var/log: !Tmpfs
        mode: 0o766
+
+  # Test container
+  # A `drupal` container with non-persistent site directory.
+  test:
+    setup:
+     - !Container drupal
+     - !Sh echo "zend.assertions = 1"  >> /etc/php/7.0/cli/php.ini
+     - !Sh echo "assert.exception = On" >> /etc/php/7.0/cli/php.ini
+    environ:
+      HOST: 127.0.0.1
+      PORT: 8081
+      DB_URL: sqlite://sites/default/drupal.sqlite
+      PROFILE: testing
+    volumes:
+      /work/web/sites: !Snapshot
+
 
 commands:
   run: !Supervise
@@ -59,20 +77,38 @@ commands:
         run: |
           # Install site if Drush cannot bootstrap Drupal
           if ! drush status --fields=bootstrap | grep -q 'Successful'; then
-            drush site-install --db-url=$DB_URL --yes
+            echo Installing Drupal $PROFILE...
+            drush site-install --db-url=$DB_URL --yes $PROFILE
           fi
-          drush runserver :$PORT
+          drush runserver $HOST:$PORT
         work-dir: web
       memcached: !Command
         container: memcache
         run: memcached -u memcache -p $PORT -m $CACHE_SIZE -vv
+
+  test: !Command
+    description: Run test
+    container: test
+    work-dir: web
+    run: |
+      # Start with a blank setting files
+      cp sites/default/default.settings.php sites/default/settings.php
+      # Install testing site
+      echo "Installing Drupal $PROFILE..."
+      drush site-install --yes --db-url=$DB_URL --verbose $PROFILE
+      # Run test server
+      drush runserver $HOST:$PORT &
+      sleep 3
+      # Run tests
+      #SIMPLETEST_BASE_URL=http://127.0.01:$PORT SIMPLETEST_DB=$DB_URL phpunit -c core --exclude-group Composer
+
   drush: !Command
     description: Run a Drush command
     container: drupal
     run: [drush]
     work-dir: web
   drupal: !Command
-    description: Run a Drupal console command
+    description: Run a Drupal Console command
     container: drupal
     run: [drupal]
     work-dir: web
