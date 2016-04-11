@@ -5,7 +5,7 @@ dist: trusty
 before_install:
   - sudo add-apt-repository 'deb http://ubuntu.zerogw.com vagga main' -y
   - sudo apt-get update -q
-  - sudo apt-get install vagga -y
+  - sudo apt-get install vagga -y --force-yes
 
 install:
   - vagga _build test
