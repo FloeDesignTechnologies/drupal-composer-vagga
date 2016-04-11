@@ -100,7 +100,7 @@ commands:
       drush runserver $HOST:$PORT &
       sleep 3
       # Run tests
-      #SIMPLETEST_BASE_URL=http://127.0.01:$PORT SIMPLETEST_DB=$DB_URL phpunit -c core --exclude-group Composer
+      SIMPLETEST_BASE_URL=http://127.0.01:$PORT SIMPLETEST_DB=$DB_URL phpunit -c core --exclude-group Composer
 
   drush: !Command
     description: Run a Drush command
